@@ -40,9 +40,9 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
-#include "bhy.h"
+#include "bhi360.h"
 #include "common.h"
-#include "bhy_system_param.h"
+#include "bhi360_system_param.h"
 
 #include "bhi360/Bosch_Shuttle3_BHI360_BMM350C_BMP580_BME688.fw.h"
 
@@ -54,31 +54,31 @@
  * @return  void
  *
  */
-static void print_api_error(int8_t rlst, struct bhy_dev *dev);
+static void print_api_error(int8_t rlst, struct bhi360_dev *dev);
 
 static void get_api_name(unsigned int line, const char *func, int8_t val);
 
 /*! File pointer to download firmware to BHI3 */
-static void upload_firmware(uint8_t boot_stat, struct bhy_dev *dev);
+static void upload_firmware(uint8_t boot_stat, struct bhi360_dev *dev);
 
 /*! Device structure */
-struct bhy_dev bhy;
+struct bhi360_dev bhy;
 
-enum bhy_intf intf;
+enum bhi360_intf intf;
 
-struct bhy_system_param_phys_sensor_info psi;
+struct bhi360_system_param_phys_sensor_info psi;
 
-struct bhy_system_param_timestamp ts;
+struct bhi360_system_param_timestamp ts;
 
-struct bhy_system_param_firmware_version fw_ver;
+struct bhi360_system_param_firmware_version fw_ver;
 
-struct bhy_system_param_fifo_control fifo_ctrl;
+struct bhi360_system_param_fifo_control fifo_ctrl;
 
-bhy_system_param_multi_meta_event_ctrl_t meta_event;
+bhi360_system_param_multi_meta_event_ctrl_t meta_event;
 
 static int8_t assert_rslt;
 
-#define BHY_ASSERT(x)  assert_rslt = x; if (assert_rslt) { get_api_name(__LINE__, __FUNCTION__, assert_rslt); }
+#define BHI360_ASSERT(x)  assert_rslt = x; if (assert_rslt) { get_api_name(__LINE__, __FUNCTION__, assert_rslt); }
 
 int main(void)
 {
@@ -89,29 +89,31 @@ int main(void)
     uint8_t hintr_ctrl, hif_ctrl, boot_status;
 
     /*! Selecting the SPI interface for sensor communication */
-#ifdef BHY_USE_I2C
-    intf = BHY_I2C_INTERFACE;
+#ifdef BHI360_USE_I2C
+    intf = BHI360_I2C_INTERFACE;
 #else
-    intf = BHY_SPI_INTERFACE;
+    intf = BHI360_SPI_INTERFACE;
 #endif
 
     setup_interfaces(true, intf); /* Perform a power on reset */
 
-#ifdef BHY_USE_I2C
-    BHY_ASSERT(bhy_init(BHY_I2C_INTERFACE, bhy_i2c_read, bhy_i2c_write, bhy_delay_us, BHY_RD_WR_LEN, NULL, &bhy));
+#ifdef BHI360_USE_I2C
+    BHI360_ASSERT(bhi360_init(BHI360_I2C_INTERFACE, bhi360_i2c_read, bhi360_i2c_write, bhi360_delay_us,
+                              BHI360_RD_WR_LEN, NULL, &bhy));
 #else
-    BHY_ASSERT(bhy_init(BHY_SPI_INTERFACE, bhy_spi_read, bhy_spi_write, bhy_delay_us, BHY_RD_WR_LEN, NULL, &bhy));
+    BHI360_ASSERT(bhi360_init(BHI360_SPI_INTERFACE, bhi360_spi_read, bhi360_spi_write, bhi360_delay_us,
+                              BHI360_RD_WR_LEN, NULL, &bhy));
 #endif
     print_api_error(assert_rslt, &bhy);
 
-    BHY_ASSERT(bhy_soft_reset(&bhy));
+    BHI360_ASSERT(bhi360_soft_reset(&bhy));
     print_api_error(assert_rslt, &bhy);
 
-    BHY_ASSERT(bhy_get_chip_id(&chip_id, &bhy));
+    BHI360_ASSERT(bhi360_get_chip_id(&chip_id, &bhy));
     print_api_error(assert_rslt, &bhy);
 
     /* Check for a valid Chip ID */
-    if (chip_id == BHI3_CHIP_ID_BHI360)
+    if (chip_id == BHI360_CHIP_ID)
     {
         printf("Chip ID read 0x%X\r\n", chip_id);
     }
@@ -121,39 +123,39 @@ int main(void)
     }
 
     /*! Check the interrupt pin and FIFO configurations. Disable status and debug */
-    hintr_ctrl = BHY_ICTL_DISABLE_STATUS_FIFO | BHY_ICTL_DISABLE_DEBUG;
+    hintr_ctrl = BHI360_ICTL_DISABLE_STATUS_FIFO | BHI360_ICTL_DISABLE_DEBUG;
 
-    BHY_ASSERT(bhy_set_host_interrupt_ctrl(hintr_ctrl, &bhy));
+    BHI360_ASSERT(bhi360_set_host_interrupt_ctrl(hintr_ctrl, &bhy));
     print_api_error(assert_rslt, &bhy);
-    BHY_ASSERT(bhy_get_host_interrupt_ctrl(&hintr_ctrl, &bhy));
+    BHI360_ASSERT(bhi360_get_host_interrupt_ctrl(&hintr_ctrl, &bhy));
     print_api_error(assert_rslt, &bhy);
 
     printf("Host interrupt control\r\n");
-    printf("    Wake up FIFO %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_FIFO_W) ? "disabled" : "enabled");
-    printf("    Non wake up FIFO %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_FIFO_NW) ? "disabled" : "enabled");
-    printf("    Status FIFO %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_STATUS_FIFO) ? "disabled" : "enabled");
-    printf("    Debugging %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_DEBUG) ? "disabled" : "enabled");
-    printf("    Fault %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_FAULT) ? "disabled" : "enabled");
-    printf("    Interrupt is %s.\r\n", (hintr_ctrl & BHY_ICTL_ACTIVE_LOW) ? "active low" : "active high");
-    printf("    Interrupt is %s triggered.\r\n", (hintr_ctrl & BHY_ICTL_EDGE) ? "pulse" : "level");
-    printf("    Interrupt pin drive is %s.\r\n", (hintr_ctrl & BHY_ICTL_OPEN_DRAIN) ? "open drain" : "push-pull");
+    printf("    Wake up FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FIFO_W) ? "disabled" : "enabled");
+    printf("    Non wake up FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FIFO_NW) ? "disabled" : "enabled");
+    printf("    Status FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_STATUS_FIFO) ? "disabled" : "enabled");
+    printf("    Debugging %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_DEBUG) ? "disabled" : "enabled");
+    printf("    Fault %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FAULT) ? "disabled" : "enabled");
+    printf("    Interrupt is %s.\r\n", (hintr_ctrl & BHI360_ICTL_ACTIVE_LOW) ? "active low" : "active high");
+    printf("    Interrupt is %s triggered.\r\n", (hintr_ctrl & BHI360_ICTL_EDGE) ? "pulse" : "level");
+    printf("    Interrupt pin drive is %s.\r\n", (hintr_ctrl & BHI360_ICTL_OPEN_DRAIN) ? "open drain" : "push-pull");
 
     /*! Configure the host interface */
     hif_ctrl = 0;
-    BHY_ASSERT(bhy_set_host_intf_ctrl(hif_ctrl, &bhy));
+    BHI360_ASSERT(bhi360_set_host_intf_ctrl(hif_ctrl, &bhy));
     print_api_error(assert_rslt, &bhy);
 
     /*! Check if the sensor is ready to load firmware */
-    BHY_ASSERT(bhy_get_boot_status(&boot_status, &bhy));
+    BHI360_ASSERT(bhi360_get_boot_status(&boot_status, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (boot_status & BHY_BST_HOST_INTERFACE_READY)
+    if (boot_status & BHI360_BST_HOST_INTERFACE_READY)
     {
         upload_firmware(boot_status, &bhy);
 
-        BHY_ASSERT(bhy_get_kernel_version(&version, &bhy));
+        BHI360_ASSERT(bhi360_get_kernel_version(&version, &bhy));
         print_api_error(assert_rslt, &bhy);
-        if ((assert_rslt == BHY_OK) && (version != 0))
+        if ((assert_rslt == BHI360_OK) && (version != 0))
         {
             printf("Boot successful. Kernel version %u.\r\n", version);
         }
@@ -167,11 +169,11 @@ int main(void)
         return 0;
     }
 
-    struct bhy_system_param_orient_matrix ort_mtx = { { 0 } };
-    BHY_ASSERT(bhy_system_param_get_physical_sensor_info(BHY_PHYS_SENSOR_ID_ACCELEROMETER, &psi, &bhy));
+    struct bhi360_system_param_orient_matrix ort_mtx = { { 0 } };
+    BHI360_ASSERT(bhi360_system_param_get_physical_sensor_info(BHI360_PHYS_SENSOR_ID_ACCELEROMETER, &psi, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         printf("\r\n");
         printf("Field Name            hex                    | Value (dec)\r\n");
@@ -242,33 +244,33 @@ int main(void)
 
     ort_mtx.c[0] = 0;
 
-    BHY_ASSERT(bhy_system_param_set_physical_sensor_info(BHY_PHYS_SENSOR_ID_ACCELEROMETER, &ort_mtx, &bhy));
+    BHI360_ASSERT(bhi360_system_param_set_physical_sensor_info(BHI360_PHYS_SENSOR_ID_ACCELEROMETER, &ort_mtx, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    BHY_ASSERT(bhy_system_param_get_physical_sensor_info(BHY_PHYS_SENSOR_ID_ACCELEROMETER, &psi, &bhy));
+    BHI360_ASSERT(bhi360_system_param_get_physical_sensor_info(BHI360_PHYS_SENSOR_ID_ACCELEROMETER, &psi, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         ort_mtx.c[0] = INT4_TO_INT8(psi.orientation_matrix[0] & 0x0F);
         printf("ort_mtx.c[0] after changed = %+02d\r\n", ort_mtx.c[0]);
     }
 
-    BHY_ASSERT(bhy_system_param_get_virtual_sensor_present(&bhy));
+    BHI360_ASSERT(bhi360_system_param_get_virtual_sensor_present(&bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         printf("\r\n");
         printf("Virtual sensor list.\r\n");
         printf("Sensor ID |                          Sensor Name\r\n");
         printf("----------+--------------------------------------|\r\n");
 
-        for (uint8_t i = 0; i < BHY_SENSOR_ID_MAX; i++)
+        for (uint8_t i = 0; i < BHI360_SENSOR_ID_MAX; i++)
         {
-            if (bhy_is_sensor_available(i, &bhy))
+            if (bhi360_is_sensor_available(i, &bhy))
             {
-                if (i < BHY_SENSOR_ID_CUSTOM_START)
+                if (i < BHI360_SENSOR_ID_CUSTOM_START)
                 {
                     printf(" %8u | %36s \r\n", i, get_sensor_name(i));
                 }
@@ -280,28 +282,28 @@ int main(void)
         }
     }
 
-    BHY_ASSERT(bhy_system_param_get_physical_sensor_present(&bhy));
+    BHI360_ASSERT(bhi360_system_param_get_physical_sensor_present(&bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         printf("\r\n");
         printf("Physical sensor list.\r\n");
         printf("Sensor ID |                          Sensor Name\r\n");
         printf("----------+--------------------------------------|\r\n");
-        for (uint8_t i = 0; i < BHY_PHYSICAL_SENSOR_ID_MAX; i++)
+        for (uint8_t i = 0; i < BHI360_PHYSICAL_SENSOR_ID_MAX; i++)
         {
-            if (bhy_is_physical_sensor_available(i, &bhy))
+            if (bhi360_is_physical_sensor_available(i, &bhy))
             {
                 printf(" %8u | %36s \r\n", i, get_physical_sensor_name(i));
             }
         }
     }
 
-    BHY_ASSERT(bhy_system_param_get_timestamps(&ts, &bhy));
+    BHI360_ASSERT(bhi360_system_param_get_timestamps(&ts, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         printf("\r\n");
         uint32_t s, ns;
@@ -333,10 +335,10 @@ int main(void)
         /*lint +e10 */
     }
 
-    BHY_ASSERT(bhy_system_param_get_firmware_version(&fw_ver, &bhy));
+    BHI360_ASSERT(bhi360_system_param_get_firmware_version(&fw_ver, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         printf("\r\n");
         printf("Custom version number: %u\r\n", fw_ver.custom_ver_num);
@@ -376,10 +378,10 @@ int main(void)
     #endif
     }
 
-    BHY_ASSERT(bhy_system_param_get_fifo_control(&fifo_ctrl, &bhy));
+    BHI360_ASSERT(bhi360_system_param_get_fifo_control(&fifo_ctrl, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         printf("\r\n");
 
@@ -393,13 +395,13 @@ int main(void)
     }
 
     fifo_ctrl.wakeup_fifo_watermark = 500;
-    BHY_ASSERT(bhy_system_param_set_wakeup_fifo_control(&fifo_ctrl, &bhy));
+    BHI360_ASSERT(bhi360_system_param_set_wakeup_fifo_control(&fifo_ctrl, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    BHY_ASSERT(bhy_system_param_get_fifo_control(&fifo_ctrl, &bhy));
+    BHI360_ASSERT(bhi360_system_param_get_fifo_control(&fifo_ctrl, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         /*lint -e10 Error 10: Lint does not understand PRIxxx */
         printf("Wakeup FIFO Watermark after changed =  %" PRIu32 "\r\n", fifo_ctrl.wakeup_fifo_watermark);
@@ -408,13 +410,13 @@ int main(void)
     }
 
     fifo_ctrl.non_wakeup_fifo_watermark = 500;
-    BHY_ASSERT(bhy_system_param_set_nonwakeup_fifo_control(&fifo_ctrl, &bhy));
+    BHI360_ASSERT(bhi360_system_param_set_nonwakeup_fifo_control(&fifo_ctrl, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    BHY_ASSERT(bhy_system_param_get_fifo_control(&fifo_ctrl, &bhy));
+    BHI360_ASSERT(bhi360_system_param_get_fifo_control(&fifo_ctrl, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         /*lint -e10 Error 10: Lint does not understand PRIxxx */
         printf("Non Wakeup FIFO Watermark after changed = %" PRIu32 "\r\n", fifo_ctrl.non_wakeup_fifo_watermark);
@@ -422,11 +424,11 @@ int main(void)
         /*lint +e10 */
     }
 
-    BHY_ASSERT(bhy_system_param_get_meta_event_control(BHY_SYSTEM_PARAM_META_EVENT_CONTROL_WAKE_UP_FIFO, &meta_event,
-                                                       &bhy));
+    BHI360_ASSERT(bhi360_system_param_get_meta_event_control(BHI360_SYSTEM_PARAM_META_EVENT_CONTROL_WAKE_UP_FIFO,
+                                                             &meta_event, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         printf("\r\n");
         printf("Meta event information:\r\n");
@@ -445,11 +447,11 @@ int main(void)
     }
 
     meta_event.group[0].as_uint8 = 128;
-    BHY_ASSERT(bhy_system_param_set_meta_event_control(BHY_SYSTEM_PARAM_META_EVENT_CONTROL_WAKE_UP_FIFO, &meta_event,
-                                                       &bhy));
+    BHI360_ASSERT(bhi360_system_param_set_meta_event_control(BHI360_SYSTEM_PARAM_META_EVENT_CONTROL_WAKE_UP_FIFO,
+                                                             &meta_event, &bhy));
     print_api_error(assert_rslt, &bhy);
 
-    if (assert_rslt == BHY_OK)
+    if (assert_rslt == BHI360_OK)
     {
         printf("\r\n");
         printf("Meta event information after changed:\r\n");
@@ -474,15 +476,15 @@ int main(void)
     return rslt;
 }
 
-static void print_api_error(int8_t rslt, struct bhy_dev *dev)
+static void print_api_error(int8_t rslt, struct bhi360_dev *dev)
 {
-    if (rslt != BHY_OK)
+    if (rslt != BHI360_OK)
     {
         printf("%s\r\n", get_api_error(rslt));
-        if ((rslt == BHY_E_IO) && (dev != NULL))
+        if ((rslt == BHI360_E_IO) && (dev != NULL))
         {
             printf("%s\r\n", get_coines_error(dev->hif.intf_rslt));
-            dev->hif.intf_rslt = BHY_INTF_RET_SUCCESS;
+            dev->hif.intf_rslt = BHI360_INTF_RET_SUCCESS;
         }
     }
 }
@@ -494,14 +496,14 @@ static void print_api_error(int8_t rslt, struct bhy_dev *dev)
  * @return  rslt execution result
  *
  */
-static void upload_firmware(uint8_t boot_stat, struct bhy_dev *dev)
+static void upload_firmware(uint8_t boot_stat, struct bhi360_dev *dev)
 {
     uint8_t sensor_error;
 
     printf("Loading firmware into RAM.\r\n");
-    BHY_ASSERT(bhy_upload_firmware_to_ram(bhy_firmware_image, sizeof(bhy_firmware_image), dev));
+    BHI360_ASSERT(bhi360_upload_firmware_to_ram(bhi360_firmware_image, sizeof(bhi360_firmware_image), dev));
     print_api_error(assert_rslt, dev);
-    BHY_ASSERT(bhy_get_error_value(&sensor_error, dev));
+    BHI360_ASSERT(bhi360_get_error_value(&sensor_error, dev));
     print_api_error(assert_rslt, dev);
     if (sensor_error)
     {
@@ -509,10 +511,10 @@ static void upload_firmware(uint8_t boot_stat, struct bhy_dev *dev)
     }
 
     printf("Booting from RAM.\r\n");
-    BHY_ASSERT(bhy_boot_from_ram(dev));
+    BHI360_ASSERT(bhi360_boot_from_ram(dev));
     print_api_error(assert_rslt, dev);
 
-    BHY_ASSERT(bhy_get_error_value(&sensor_error, dev));
+    BHI360_ASSERT(bhi360_get_error_value(&sensor_error, dev));
 
     if (sensor_error)
     {

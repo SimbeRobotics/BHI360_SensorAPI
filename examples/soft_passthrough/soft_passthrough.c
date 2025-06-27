@@ -39,10 +39,10 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "bhy.h"
-#include "bhy_event_data.h"
+#include "bhi360.h"
+#include "bhi360_event_data.h"
 #include "common.h"
-#include "bhy_virtual_sensor_conf_param.h"
+#include "bhi360_virtual_sensor_conf_param.h"
 
 #include "bhi360/Bosch_Shuttle3_BHI360_BMM350C_BMP580_BME688.fw.h"
 
@@ -77,21 +77,21 @@
  *  @param[in] callback_info : Sensor data info.
  *  @param[in] callback_ref  : Parse reference.
  */
-static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_info, void *callback_ref);
+static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 
 /*! @brief Prints API error code.
  *
  *  @param[in] rslt      : API Error code.
  *  @param[in] dev       : Device reference.
  */
-static void print_api_error(int8_t rslt, struct bhy_dev *dev);
+static void print_api_error(int8_t rslt, struct bhi360_dev *dev);
 
 /*! @brief Loads firmware image to BHy ram.
  *
  *  @param[in] boot_stat : Boot status.
  *  @param[in] dev       : Device reference.
  */
-static void upload_firmware(uint8_t boot_stat, struct bhy_dev *dev);
+static void upload_firmware(uint8_t boot_stat, struct bhi360_dev *dev);
 
 /*! @brief Soft Pass-Through function to read from register via I2C.
  *
@@ -107,7 +107,7 @@ static void spt_i2c_read(uint8_t sif_bus,
                          uint8_t reg_addr,
                          uint8_t *reg_data,
                          uint8_t length,
-                         struct bhy_dev *dev);
+                         struct bhi360_dev *dev);
 
 /*! @brief Soft Pass-Through function to write to register via I2C.
  *
@@ -123,14 +123,14 @@ static void spt_i2c_write(uint8_t sif_bus,
                           uint8_t reg_addr,
                           uint8_t *reg_data,
                           uint8_t length,
-                          struct bhy_dev *dev);
+                          struct bhi360_dev *dev);
 
 /*! @brief Parse accel data.
  *
  *  @param[in] callback_info : sensor data info.
  *  @param[in] callback_ref  : Parse reference.
  */
-static void parse_accel(const struct bhy_fifo_parse_data_info *callback_info, void *callback_ref);
+static void parse_accel(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
 
 /*! @brief Soft Pass-Through function to read from register via SPI.
  *
@@ -139,7 +139,7 @@ static void parse_accel(const struct bhy_fifo_parse_data_info *callback_info, vo
  *  @param[in] reg_data   : Reference to the data buffer.
  *  @param[in] read_cnt   : Length of the data to be read.
  */
-static void spt_spi0_read(uint8_t reg_addr, uint8_t* reg_data, uint8_t read_cnt, struct bhy_dev *dev);
+static void spt_spi0_read(uint8_t reg_addr, uint8_t* reg_data, uint8_t read_cnt, struct bhi360_dev *dev);
 
 /*! @brief Soft Pass-Through function to write to register via SPI.
  *
@@ -148,16 +148,16 @@ static void spt_spi0_read(uint8_t reg_addr, uint8_t* reg_data, uint8_t read_cnt,
  *  @param[in] reg_data   : Reference to the data buffer.
  *  @param[in] write_cnt  : Length of the data to be written.
  */
-static void spt_spi0_write(uint8_t reg_addr, uint8_t* reg_data, uint8_t write_cnt, struct bhy_dev *dev);
+static void spt_spi0_write(uint8_t reg_addr, uint8_t* reg_data, uint8_t write_cnt, struct bhi360_dev *dev);
 
-enum bhy_intf intf;
+enum bhi360_intf intf;
 
 int main(void)
 {
     uint8_t chip_id = 0;
     uint16_t version = 0;
     int8_t rslt;
-    struct bhy_dev bhy;
+    struct bhi360_dev bhy;
     uint8_t reg_data[16];
     uint8_t hif_ctrl, boot_status, hintr_ctrl;
     uint8_t data_length = 0;
@@ -167,29 +167,41 @@ int main(void)
     uint8_t loop = 0;
     uint8_t limit = 50;
 
-#ifdef BHY_USE_I2C
-    intf = BHY_I2C_INTERFACE;
+#ifdef BHI360_USE_I2C
+    intf = BHI360_I2C_INTERFACE;
 #else
-    intf = BHY_SPI_INTERFACE;
+    intf = BHI360_SPI_INTERFACE;
 #endif
 
     setup_interfaces(true, intf); /* Perform a power on reset */
 
-#ifdef BHY_USE_I2C
-    rslt = bhy_init(BHY_I2C_INTERFACE, bhy_i2c_read, bhy_i2c_write, bhy_delay_us, BHY_RD_WR_LEN, NULL, &bhy);
+#ifdef BHI360_USE_I2C
+    rslt = bhi360_init(BHI360_I2C_INTERFACE,
+                       bhi360_i2c_read,
+                       bhi360_i2c_write,
+                       bhi360_delay_us,
+                       BHI360_RD_WR_LEN,
+                       NULL,
+                       &bhy);
 #else
-    rslt = bhy_init(BHY_SPI_INTERFACE, bhy_spi_read, bhy_spi_write, bhy_delay_us, BHY_RD_WR_LEN, NULL, &bhy);
+    rslt = bhi360_init(BHI360_SPI_INTERFACE,
+                       bhi360_spi_read,
+                       bhi360_spi_write,
+                       bhi360_delay_us,
+                       BHI360_RD_WR_LEN,
+                       NULL,
+                       &bhy);
 #endif
     print_api_error(rslt, &bhy);
 
-    rslt = bhy_soft_reset(&bhy);
+    rslt = bhi360_soft_reset(&bhy);
     print_api_error(rslt, &bhy);
 
-    rslt = bhy_get_chip_id(&chip_id, &bhy);
+    rslt = bhi360_get_chip_id(&chip_id, &bhy);
     print_api_error(rslt, &bhy);
 
     /* Check for a valid Chip ID */
-    if (chip_id == BHI3_CHIP_ID_BHI360)
+    if (chip_id == BHI360_CHIP_ID)
     {
         printf("Chip ID read 0x%X\r\n", chip_id);
     }
@@ -199,49 +211,50 @@ int main(void)
     }
 
     /* Configure the host interface */
-    hif_ctrl = BHY_HIF_CTRL_ASYNC_STATUS_CHANNEL;
-    rslt = bhy_set_host_intf_ctrl(hif_ctrl, &bhy);
+    hif_ctrl = BHI360_HIF_CTRL_ASYNC_STATUS_CHANNEL;
+    rslt = bhi360_set_host_intf_ctrl(hif_ctrl, &bhy);
     print_api_error(rslt, &bhy);
 
     /* Check the interrupt pin and FIFO configurations. Disable status and debug */
-    hintr_ctrl = BHY_ICTL_DISABLE_STATUS_FIFO | BHY_ICTL_DISABLE_DEBUG;
+    hintr_ctrl = BHI360_ICTL_DISABLE_STATUS_FIFO | BHI360_ICTL_DISABLE_DEBUG;
 
-    rslt = bhy_get_host_interrupt_ctrl(&hintr_ctrl, &bhy);
+    rslt = bhi360_get_host_interrupt_ctrl(&hintr_ctrl, &bhy);
     print_api_error(rslt, &bhy);
 
     printf("Host interrupt control\r\n");
-    printf("    Wake up FIFO %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_FIFO_W) ? "disabled" : "enabled");
-    printf("    Non wake up FIFO %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_FIFO_NW) ? "disabled" : "enabled");
-    printf("    Status FIFO %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_STATUS_FIFO) ? "disabled" : "enabled");
-    printf("    Debugging %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_DEBUG) ? "disabled" : "enabled");
-    printf("    Fault %s.\r\n", (hintr_ctrl & BHY_ICTL_DISABLE_FAULT) ? "disabled" : "enabled");
-    printf("    Interrupt is %s.\r\n", (hintr_ctrl & BHY_ICTL_ACTIVE_LOW) ? "active low" : "active high");
-    printf("    Interrupt is %s triggered.\r\n", (hintr_ctrl & BHY_ICTL_EDGE) ? "pulse" : "level");
-    printf("    Interrupt pin drive is %s.\r\n", (hintr_ctrl & BHY_ICTL_OPEN_DRAIN) ? "open drain" : "push-pull");
+    printf("    Wake up FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FIFO_W) ? "disabled" : "enabled");
+    printf("    Non wake up FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FIFO_NW) ? "disabled" : "enabled");
+    printf("    Status FIFO %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_STATUS_FIFO) ? "disabled" : "enabled");
+    printf("    Debugging %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_DEBUG) ? "disabled" : "enabled");
+    printf("    Fault %s.\r\n", (hintr_ctrl & BHI360_ICTL_DISABLE_FAULT) ? "disabled" : "enabled");
+    printf("    Interrupt is %s.\r\n", (hintr_ctrl & BHI360_ICTL_ACTIVE_LOW) ? "active low" : "active high");
+    printf("    Interrupt is %s triggered.\r\n", (hintr_ctrl & BHI360_ICTL_EDGE) ? "pulse" : "level");
+    printf("    Interrupt pin drive is %s.\r\n", (hintr_ctrl & BHI360_ICTL_OPEN_DRAIN) ? "open drain" : "push-pull");
 
     /* Check if the sensor is ready to load firmware */
-    rslt = bhy_get_boot_status(&boot_status, &bhy);
+    rslt = bhi360_get_boot_status(&boot_status, &bhy);
     print_api_error(rslt, &bhy);
 
-    if (boot_status & BHY_BST_HOST_INTERFACE_READY)
+    if (boot_status & BHI360_BST_HOST_INTERFACE_READY)
     {
         upload_firmware(boot_status, &bhy);
 
-        rslt = bhy_get_kernel_version(&version, &bhy);
+        rslt = bhi360_get_kernel_version(&version, &bhy);
         print_api_error(rslt, &bhy);
-        if ((rslt == BHY_OK) && (version != 0))
+        if ((rslt == BHI360_OK) && (version != 0))
         {
             printf("Boot successful. Kernel version %u.\r\n", version);
         }
 
-        rslt = bhy_register_fifo_parse_callback(BHY_SYS_ID_META_EVENT, parse_meta_event, (void*)&accuracy, &bhy);
+        rslt = bhi360_register_fifo_parse_callback(BHI360_SYS_ID_META_EVENT, parse_meta_event, (void*)&accuracy, &bhy);
         print_api_error(rslt, &bhy);
-        rslt = bhy_register_fifo_parse_callback(BHY_SYS_ID_META_EVENT_WU, parse_meta_event, (void*)&accuracy, &bhy);
+        rslt =
+            bhi360_register_fifo_parse_callback(BHI360_SYS_ID_META_EVENT_WU, parse_meta_event, (void*)&accuracy, &bhy);
         print_api_error(rslt, &bhy);
-        rslt = bhy_register_fifo_parse_callback(BHY_SENSOR_ID_ACC_WU, parse_accel, (void*)&accuracy, &bhy);
+        rslt = bhi360_register_fifo_parse_callback(BHI360_SENSOR_ID_ACC_WU, parse_accel, (void*)&accuracy, &bhy);
         print_api_error(rslt, &bhy);
 
-        rslt = bhy_get_and_process_fifo(work_buffer, WORK_BUFFER_SIZE, &bhy);
+        rslt = bhi360_get_and_process_fifo(work_buffer, WORK_BUFFER_SIZE, &bhy);
         print_api_error(rslt, &bhy);
     }
     else
@@ -277,7 +290,7 @@ int main(void)
 
     /* Attempt to read out the chip ID from the BMM150 connected over SIF2 of the BHI360 - on power on reset */
     data_length = 1;
-    spt_i2c_read(BHY_SPASS_SIF2, BMM150_I2C_SLAVE_ADDR, BMM150_CHIP_ID_REG, reg_data, data_length, &bhy);
+    spt_i2c_read(BHI360_SPASS_SIF2, BMM150_I2C_SLAVE_ADDR, BMM150_CHIP_ID_REG, reg_data, data_length, &bhy);
     if (reg_data[0] == CHIP_ID_READ_ON_POR)
     {
         printf("BMM150 Chip ID read returns 0x00: In suspend mode\r\n"); /* Set the power bit to 1 in power control
@@ -291,10 +304,10 @@ int main(void)
     write_data[0] = BMM150_POWER_CONTROL_REG_VALUE;
     data_length = 1;
     printf("BMM150 Power Control Register Write\r\n");
-    spt_i2c_write(BHY_SPASS_SIF2, BMM150_I2C_SLAVE_ADDR, BMM150_POWER_CONTROL_REG, write_data, data_length, &bhy);
+    spt_i2c_write(BHI360_SPASS_SIF2, BMM150_I2C_SLAVE_ADDR, BMM150_POWER_CONTROL_REG, write_data, data_length, &bhy);
 
     /* Attempt to read out the BMM150 chip ID after writing power control register */
-    spt_i2c_read(BHY_SPASS_SIF2, BMM150_I2C_SLAVE_ADDR, BMM150_CHIP_ID_REG, reg_data, data_length, &bhy);
+    spt_i2c_read(BHI360_SPASS_SIF2, BMM150_I2C_SLAVE_ADDR, BMM150_CHIP_ID_REG, reg_data, data_length, &bhy);
     if (reg_data[0] == BMM150_CHIP_ID)
     {
         printf("BMM150 Chip ID read returns: %X In sleep mode\r\n", reg_data[0]);
@@ -304,34 +317,34 @@ int main(void)
     printf("BME688 Reset Register Write\r\n");
     write_data[0] = BME688_RESET_REG_VALUE;
     data_length = 1;
-    spt_i2c_write(BHY_SPASS_SIF3, BME688_I2C_SLAVE_ADDR, BME688_RESET_REG, write_data, data_length, &bhy);
+    spt_i2c_write(BHI360_SPASS_SIF3, BME688_I2C_SLAVE_ADDR, BME688_RESET_REG, write_data, data_length, &bhy);
 
     /* Attempt to read out BME688 chip ID after reset */
-    spt_i2c_read(BHY_SPASS_SIF3, BME688_I2C_SLAVE_ADDR, BME688_CHIP_ID_REG, reg_data, data_length, &bhy);
+    spt_i2c_read(BHI360_SPASS_SIF3, BME688_I2C_SLAVE_ADDR, BME688_CHIP_ID_REG, reg_data, data_length, &bhy);
     if (reg_data[0] == BME688_CHIP_ID)
     {
         printf("BME688 Chip ID read returns: %X\r\n", reg_data[0]);
     }
 
     /* Update the callback table to enable parsing of sensor data */
-    rslt = bhy_update_virtual_sensor_list(&bhy);
+    rslt = bhi360_update_virtual_sensor_list(&bhy);
     print_api_error(rslt, &bhy);
 
-    struct bhy_virtual_sensor_conf_param_conf sensor_conf = { 0 };
+    struct bhi360_virtual_sensor_conf_param_conf sensor_conf = { 0 };
 
     sensor_conf.sample_rate = 100.0f; /* Read out data measured at 100Hz */
     sensor_conf.latency = 0; /* Report immediately */
-    rslt = bhy_virtual_sensor_conf_param_set_cfg(BHY_SENSOR_ID_ACC_WU, &sensor_conf, &bhy);
+    rslt = bhi360_virtual_sensor_conf_param_set_cfg(BHI360_SENSOR_ID_ACC_WU, &sensor_conf, &bhy);
     print_api_error(rslt, &bhy);
-    printf("Enable %s at %.2fHz.\r\n", get_sensor_name(BHY_SENSOR_ID_ACC_WU), sensor_conf.sample_rate);
+    printf("Enable %s at %.2fHz.\r\n", get_sensor_name(BHI360_SENSOR_ID_ACC_WU), sensor_conf.sample_rate);
     printf("Data Acquisition:\r\n");
 
-    while (rslt == BHY_OK && loop < limit)
+    while (rslt == BHI360_OK && loop < limit)
     {
         if (get_interrupt_status())
         {
             /* Data from the FIFO is read and the relevant callbacks if registered are called */
-            rslt = bhy_get_and_process_fifo(work_buffer, WORK_BUFFER_SIZE, &bhy);
+            rslt = bhi360_get_and_process_fifo(work_buffer, WORK_BUFFER_SIZE, &bhy);
             loop++;
             print_api_error(rslt, &bhy);
         }
@@ -342,9 +355,9 @@ int main(void)
     return rslt;
 }
 
-static void parse_accel(const struct bhy_fifo_parse_data_info *callback_info, void *callback_ref)
+static void parse_accel(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
 {
-    struct bhy_event_data_xyz data;
+    struct bhi360_event_data_xyz data;
     float scaling_factor = SCALING_FACTOR_INVALID_LIMIT;
 
     if (!callback_info)
@@ -354,9 +367,9 @@ static void parse_accel(const struct bhy_fifo_parse_data_info *callback_info, vo
         return;
     }
 
-    bhy_event_data_parse_xyz(callback_info->data_ptr, &data);
+    bhi360_event_data_parse_xyz(callback_info->data_ptr, &data);
 
-    scaling_factor = (float)BHY_ACCEL_16G / 32768.0f; /* since the sensor data will be scaled to signed 16bits */
+    scaling_factor = (float)BHI360_ACCEL_16G / 32768.0f; /* since the sensor data will be scaled to signed 16bits */
 
     printf(" x: %f, y: %f, z: %f; unit: LSB/G\r\n",
            data.x * scaling_factor,
@@ -365,11 +378,11 @@ static void parse_accel(const struct bhy_fifo_parse_data_info *callback_info, vo
 
 }
 
-static void spt_spi0_read(uint8_t reg_addr, uint8_t* reg_data, uint8_t read_cnt, struct bhy_dev *dev)
+static void spt_spi0_read(uint8_t reg_addr, uint8_t* reg_data, uint8_t read_cnt, struct bhi360_dev *dev)
 {
-    uint8_t rslt = BHY_OK;
+    uint8_t rslt = BHI360_OK;
     uint8_t transfer_bytes = 0;
-    union bhy_soft_passthrough_conf conf;
+    union bhi360_soft_passthrough_conf conf;
 
     /* transfer bytes */
     if (read_cnt > MAX_PASSTHROUGH_TRANSFER_BYTE)
@@ -381,36 +394,36 @@ static void spt_spi0_read(uint8_t reg_addr, uint8_t* reg_data, uint8_t read_cnt,
         transfer_bytes = read_cnt;
     }
 
-    conf.conf.direction = BHY_SPASS_READ;
-    conf.conf.trans_type = BHY_SPASS_SINGLE_TRANS;
-    conf.conf.delay_ctrl = BHY_SPASS_DELAY_DIS;
-    conf.conf.master_bus = BHY_SPASS_SIF1;
+    conf.conf.direction = BHI360_SPASS_READ;
+    conf.conf.trans_type = BHI360_SPASS_SINGLE_TRANS;
+    conf.conf.delay_ctrl = BHI360_SPASS_DELAY_DIS;
+    conf.conf.master_bus = BHI360_SPASS_SIF1;
 
-    conf.conf.spi_mode = BHY_SPASS_SPI_4_WIRE;
-    conf.conf.cpol = BHY_SPASS_SPI_CPOL_1;
-    conf.conf.cpha = BHY_SPASS_SPI_CPHA_1;
-    conf.conf.cs_level = BHY_SPASS_SPI_CS_LOW;
-    conf.conf.lsb_first = BHY_SPASS_SPI_LSB_FIRST_DIS;
+    conf.conf.spi_mode = BHI360_SPASS_SPI_4_WIRE;
+    conf.conf.cpol = BHI360_SPASS_SPI_CPOL_1;
+    conf.conf.cpha = BHI360_SPASS_SPI_CPHA_1;
+    conf.conf.cs_level = BHI360_SPASS_SPI_CS_LOW;
+    conf.conf.lsb_first = BHI360_SPASS_SPI_LSB_FIRST_DIS;
     conf.conf.trans_rate = SPI_TRANSFER_RATE; /*in kHz, 16-bit unsigned, LSB first 0x03E8 = 1MHz */
     conf.conf.address_shift = 0;
     conf.conf.read_bit_pol = 1;
-    conf.conf.read_bit_pos = BHY_SPASS_SPI_READ_BIT_POS_7;
+    conf.conf.read_bit_pos = BHI360_SPASS_SPI_READ_BIT_POS_7;
     conf.conf.func_set.cs_pin = SPI_M1_CS_PIN;
 
     conf.conf.trans_count = transfer_bytes + 1;
     conf.conf.reg = reg_addr;
 
     /* BMI270 Reg_data[0] is dummy value, reg_data[1] is register value */
-    rslt = bhy_soft_passthrough_transfer(&conf, conf.conf.reg, conf.conf.trans_count, reg_data, dev);
+    rslt = bhi360_soft_passthrough_transfer(&conf, conf.conf.reg, conf.conf.trans_count, reg_data, dev);
 
     print_api_error(rslt, dev);
 }
 
-static void spt_spi0_write(uint8_t reg_addr, uint8_t* reg_data, uint8_t write_cnt, struct bhy_dev *dev)
+static void spt_spi0_write(uint8_t reg_addr, uint8_t* reg_data, uint8_t write_cnt, struct bhi360_dev *dev)
 {
-    uint8_t rslt = BHY_OK;
+    uint8_t rslt = BHI360_OK;
     uint8_t transfer_bytes = 0;
-    union bhy_soft_passthrough_conf conf;
+    union bhi360_soft_passthrough_conf conf;
 
     /* transfer bytes */
     if (write_cnt > MAX_PASSTHROUGH_TRANSFER_BYTE)
@@ -422,26 +435,26 @@ static void spt_spi0_write(uint8_t reg_addr, uint8_t* reg_data, uint8_t write_cn
         transfer_bytes = write_cnt;
     }
 
-    conf.conf.direction = BHY_SPASS_WRITE;
-    conf.conf.trans_type = BHY_SPASS_MULTI_TRANS; /* multiple bytes to write */
-    conf.conf.delay_ctrl = BHY_SPASS_DELAY_DIS;
-    conf.conf.master_bus = BHY_SPASS_SIF1;
+    conf.conf.direction = BHI360_SPASS_WRITE;
+    conf.conf.trans_type = BHI360_SPASS_MULTI_TRANS; /* multiple bytes to write */
+    conf.conf.delay_ctrl = BHI360_SPASS_DELAY_DIS;
+    conf.conf.master_bus = BHI360_SPASS_SIF1;
 
-    conf.conf.spi_mode = BHY_SPASS_SPI_4_WIRE;
-    conf.conf.cpol = BHY_SPASS_SPI_CPOL_1;
-    conf.conf.cpha = BHY_SPASS_SPI_CPHA_1;
-    conf.conf.cs_level = BHY_SPASS_SPI_CS_LOW;
-    conf.conf.lsb_first = BHY_SPASS_SPI_LSB_FIRST_DIS;
+    conf.conf.spi_mode = BHI360_SPASS_SPI_4_WIRE;
+    conf.conf.cpol = BHI360_SPASS_SPI_CPOL_1;
+    conf.conf.cpha = BHI360_SPASS_SPI_CPHA_1;
+    conf.conf.cs_level = BHI360_SPASS_SPI_CS_LOW;
+    conf.conf.lsb_first = BHI360_SPASS_SPI_LSB_FIRST_DIS;
     conf.conf.trans_rate = SPI_TRANSFER_RATE; /*in kHz, 16-bit unsigned, LSB first 0x03E8 = 1MHz */
     conf.conf.address_shift = 0;
     conf.conf.read_bit_pol = 1;
-    conf.conf.read_bit_pos = BHY_SPASS_SPI_READ_BIT_POS_7;
+    conf.conf.read_bit_pos = BHI360_SPASS_SPI_READ_BIT_POS_7;
     conf.conf.func_set.cs_pin = SPI_M1_CS_PIN;
 
     conf.conf.trans_count = transfer_bytes;
     conf.conf.reg = reg_addr;
 
-    rslt = bhy_soft_passthrough_transfer(&conf, conf.conf.reg, conf.conf.trans_count, reg_data, dev);
+    rslt = bhi360_soft_passthrough_transfer(&conf, conf.conf.reg, conf.conf.trans_count, reg_data, dev);
     print_api_error(rslt, dev);
 }
 
@@ -450,17 +463,17 @@ static void spt_i2c_read(uint8_t sif_bus,
                          uint8_t reg_addr,
                          uint8_t *reg_data,
                          uint8_t length,
-                         struct bhy_dev *dev)
+                         struct bhi360_dev *dev)
 {
-    int8_t rslt = BHY_OK;
-    union bhy_soft_passthrough_conf spt_conf = { { 0 } };
+    int8_t rslt = BHI360_OK;
+    union bhi360_soft_passthrough_conf spt_conf = { { 0 } };
 
-    spt_conf.conf.direction = BHY_SPASS_READ;
-    spt_conf.conf.trans_type = BHY_SPASS_SINGLE_TRANS;
+    spt_conf.conf.direction = BHI360_SPASS_READ;
+    spt_conf.conf.trans_type = BHI360_SPASS_SINGLE_TRANS;
     spt_conf.conf.master_bus = sif_bus;
     spt_conf.conf.func_set.slave_address = dev_addr;
 
-    rslt = bhy_soft_passthrough_transfer(&spt_conf, reg_addr, length, reg_data, dev);
+    rslt = bhi360_soft_passthrough_transfer(&spt_conf, reg_addr, length, reg_data, dev);
     print_api_error(rslt, dev);
 }
 
@@ -469,21 +482,21 @@ static void spt_i2c_write(uint8_t sif_bus,
                           uint8_t reg_addr,
                           uint8_t *reg_data,
                           uint8_t length,
-                          struct bhy_dev *dev)
+                          struct bhi360_dev *dev)
 {
-    int8_t rslt = BHY_OK;
-    union bhy_soft_passthrough_conf spt_conf = { { 0 } };
+    int8_t rslt = BHI360_OK;
+    union bhi360_soft_passthrough_conf spt_conf = { { 0 } };
 
-    spt_conf.conf.direction = BHY_SPASS_WRITE;
-    spt_conf.conf.trans_type = BHY_SPASS_SINGLE_TRANS;
+    spt_conf.conf.direction = BHI360_SPASS_WRITE;
+    spt_conf.conf.trans_type = BHI360_SPASS_SINGLE_TRANS;
     spt_conf.conf.master_bus = sif_bus;
     spt_conf.conf.func_set.slave_address = dev_addr;
 
-    rslt = bhy_soft_passthrough_transfer(&spt_conf, reg_addr, length, reg_data, dev);
+    rslt = bhi360_soft_passthrough_transfer(&spt_conf, reg_addr, length, reg_data, dev);
     print_api_error(rslt, dev);
 }
 
-static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_info, void *callback_ref)
+static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
 {
     (void)callback_ref;
     uint8_t meta_event_type = callback_info->data_ptr[0];
@@ -492,11 +505,11 @@ static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_inf
     uint8_t *accuracy = (uint8_t*)callback_ref;
     char *event_text;
 
-    if (callback_info->sensor_id == BHY_SYS_ID_META_EVENT)
+    if (callback_info->sensor_id == BHI360_SYS_ID_META_EVENT)
     {
         event_text = "[META EVENT]";
     }
-    else if (callback_info->sensor_id == BHY_SYS_ID_META_EVENT_WU)
+    else if (callback_info->sensor_id == BHI360_SYS_ID_META_EVENT_WU)
     {
         event_text = "[META EVENT WAKE UP]";
     }
@@ -507,19 +520,19 @@ static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_inf
 
     switch (meta_event_type)
     {
-        case BHY_META_EVENT_FLUSH_COMPLETE:
+        case BHI360_META_EVENT_FLUSH_COMPLETE:
             printf("%s Flush complete for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_SAMPLE_RATE_CHANGED:
+        case BHI360_META_EVENT_SAMPLE_RATE_CHANGED:
             printf("%s Sample rate changed for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_POWER_MODE_CHANGED:
+        case BHI360_META_EVENT_POWER_MODE_CHANGED:
             printf("%s Power mode changed for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_ALGORITHM_EVENTS:
+        case BHI360_META_EVENT_ALGORITHM_EVENTS:
             printf("%s Algorithm event\r\n", event_text);
             break;
-        case BHY_META_EVENT_SENSOR_STATUS:
+        case BHI360_META_EVENT_SENSOR_STATUS:
             printf("%s Accuracy for sensor id %u changed to %u\r\n", event_text, byte1, byte2);
             if (accuracy)
             {
@@ -527,40 +540,40 @@ static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_inf
             }
 
             break;
-        case BHY_META_EVENT_BSX_DO_STEPS_MAIN:
+        case BHI360_META_EVENT_BSX_DO_STEPS_MAIN:
             printf("%s BSX event (do steps main)\r\n", event_text);
             break;
-        case BHY_META_EVENT_BSX_DO_STEPS_CALIB:
+        case BHI360_META_EVENT_BSX_DO_STEPS_CALIB:
             printf("%s BSX event (do steps calib)\r\n", event_text);
             break;
-        case BHY_META_EVENT_BSX_GET_OUTPUT_SIGNAL:
+        case BHI360_META_EVENT_BSX_GET_OUTPUT_SIGNAL:
             printf("%s BSX event (get output signal)\r\n", event_text);
             break;
-        case BHY_META_EVENT_SENSOR_ERROR:
+        case BHI360_META_EVENT_SENSOR_ERROR:
             printf("%s Sensor id %u reported error 0x%02X\r\n", event_text, byte1, byte2);
             break;
-        case BHY_META_EVENT_FIFO_OVERFLOW:
+        case BHI360_META_EVENT_FIFO_OVERFLOW:
             printf("%s FIFO overflow\r\n", event_text);
             break;
-        case BHY_META_EVENT_DYNAMIC_RANGE_CHANGED:
+        case BHI360_META_EVENT_DYNAMIC_RANGE_CHANGED:
             printf("%s Dynamic range changed for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_FIFO_WATERMARK:
+        case BHI360_META_EVENT_FIFO_WATERMARK:
             printf("%s FIFO watermark reached\r\n", event_text);
             break;
-        case BHY_META_EVENT_INITIALIZED:
+        case BHI360_META_EVENT_INITIALIZED:
             printf("%s Firmware initialized. Firmware version %u\r\n", event_text, ((uint16_t)byte2 << 8) | byte1);
             break;
-        case BHY_META_TRANSFER_CAUSE:
+        case BHI360_META_TRANSFER_CAUSE:
             printf("%s Transfer cause for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_SENSOR_FRAMEWORK:
+        case BHI360_META_EVENT_SENSOR_FRAMEWORK:
             printf("%s Sensor framework event for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_RESET:
+        case BHI360_META_EVENT_RESET:
             printf("%s Reset event\r\n", event_text);
             break;
-        case BHY_META_EVENT_SPACER:
+        case BHI360_META_EVENT_SPACER:
             break;
         default:
             printf("%s Unknown meta event with id: %u\r\n", event_text, meta_event_type);
@@ -568,30 +581,30 @@ static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_inf
     }
 }
 
-static void print_api_error(int8_t rslt, struct bhy_dev *dev)
+static void print_api_error(int8_t rslt, struct bhi360_dev *dev)
 {
-    if (rslt != BHY_OK)
+    if (rslt != BHI360_OK)
     {
         printf("%s\r\n", get_api_error(rslt));
-        if ((rslt == BHY_E_IO) && (dev != NULL))
+        if ((rslt == BHI360_E_IO) && (dev != NULL))
         {
             printf("%s\r\n", get_coines_error(dev->hif.intf_rslt));
-            dev->hif.intf_rslt = BHY_INTF_RET_SUCCESS;
+            dev->hif.intf_rslt = BHI360_INTF_RET_SUCCESS;
         }
 
         exit(0);
     }
 }
 
-static void upload_firmware(uint8_t boot_stat, struct bhy_dev *dev)
+static void upload_firmware(uint8_t boot_stat, struct bhi360_dev *dev)
 {
     uint8_t sensor_error;
     int8_t temp_rslt;
-    int8_t rslt = BHY_OK;
+    int8_t rslt = BHI360_OK;
 
     printf("Loading firmware into RAM.\r\n");
-    rslt = bhy_upload_firmware_to_ram(bhy_firmware_image, sizeof(bhy_firmware_image), dev);
-    temp_rslt = bhy_get_error_value(&sensor_error, dev);
+    rslt = bhi360_upload_firmware_to_ram(bhi360_firmware_image, sizeof(bhi360_firmware_image), dev);
+    temp_rslt = bhi360_get_error_value(&sensor_error, dev);
     if (sensor_error)
     {
         printf("%s\r\n", get_sensor_error_text(sensor_error));
@@ -601,9 +614,9 @@ static void upload_firmware(uint8_t boot_stat, struct bhy_dev *dev)
     print_api_error(temp_rslt, dev);
 
     printf("Booting from RAM.\r\n");
-    rslt = bhy_boot_from_ram(dev);
+    rslt = bhi360_boot_from_ram(dev);
 
-    temp_rslt = bhy_get_error_value(&sensor_error, dev);
+    temp_rslt = bhi360_get_error_value(&sensor_error, dev);
     if (sensor_error)
     {
         printf("%s\r\n", get_sensor_error_text(sensor_error));

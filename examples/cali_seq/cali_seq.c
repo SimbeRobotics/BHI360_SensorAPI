@@ -39,85 +39,97 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#include "bhy.h"
-#include "bhy_parse.h"
+#include "bhi360.h"
+#include "bhi360_parse.h"
 #include "common.h"
-#include "bhy_phy_sensor_ctrl_param_defs.h"
+#include "bhi360_phy_sensor_ctrl_param_defs.h"
 
 #include "bhi360/Bosch_Shuttle3_BHI360_BMM350C_BMP580_BME688.fw.h"
 
-#define SENSOR_FOC_SUCCESS     (0)
-#define SENSOR_FOC_FAIL        (101)
-#define SENSOR_FOC_UNKNOWN     (36)
-#define SENSOR_CRT_SUCCESS     (0)
-#define SENSOR_CRT_FAIL        (2)
+#define SENSOR_FOC_SUCCESS       (0)
+#define SENSOR_FOC_FAIL          (101)
+#define SENSOR_FOC_UNKNOWN       (36)
+#define SENSOR_CRT_SUCCESS       (0)
+#define SENSOR_CRT_FAIL          (2)
 
-#define WORK_BUFFER_SIZE       2048
+#define WORK_BUFFER_SIZE         2048
 
-#define BHI3_PHY_CRT_CTRL_LEN  (3)
-#define CALIB_SEQ_FILE_NAME    "cal_seq.txt"
+#define BHI360_PHY_CRT_CTRL_LEN  (3)
+#define CALIB_SEQ_FILE_NAME      "cal_seq.txt"
 
-static void print_api_error(int8_t rslt, struct bhy_dev *dev);
-static int8_t upload_firmware(struct bhy_dev *dev);
-static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_info, void *callback_ref);
-static void parse_3axis_s16(const struct bhy_fifo_parse_data_info *callback_info, void *callback_ref);
-static int8_t bhi3_perform_foc_crt(struct bhy_foc_resp *acc_foc_status,
-                                   struct bhy_foc_resp *gyro_foc_status,
-                                   struct bhy_dev *dev,
+static void print_api_error(int8_t rslt, struct bhi360_dev *dev);
+static int8_t upload_firmware(struct bhi360_dev *dev);
+static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
+static void parse_3axis_s16(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref);
+static int8_t bhi3_perform_foc_crt(struct bhi360_foc_resp *acc_foc_status,
+                                   struct bhi360_foc_resp *gyro_foc_status,
+                                   struct bhi360_dev *dev,
                                    uint8_t flag);
-static int8_t bhi3_load_gyro_crt(const uint8_t *gyro_crt, struct bhy_dev *dev);
+static int8_t bhi3_load_gyro_crt(const uint8_t *gyro_crt, struct bhi360_dev *dev);
 
 static int16_t convert_char_int(char *line, char *pattern1, char *pattern2);
 
-static bhy_phy_sensor_ctrl_param_gyro_fast_offset_calib foc_resp_gyro_backup;
-static bhy_phy_sensor_ctrl_param_accel_fast_offset_calib foc_resp_acc_backup;
+static bhi360_phy_sensor_ctrl_param_gyro_fast_offset_calib foc_resp_gyro_backup;
+static bhi360_phy_sensor_ctrl_param_accel_fast_offset_calib foc_resp_acc_backup;
 static uint8_t crt_backup[3] = { 0 };
 
-enum bhy_intf intf;
+enum bhi360_intf intf;
 
 int main(int argc, char *argv[])
 {
     int8_t rslt;
     uint8_t product_id = 0;
     uint16_t version = 0;
-    struct bhy_dev bhy;
+    struct bhi360_dev bhy;
     uint8_t hintr_ctrl, hif_ctrl, boot_status;
-    struct bhy_foc_resp foc_resp_gyro, foc_resp_acc;
+    struct bhi360_foc_resp foc_resp_gyro, foc_resp_acc;
     uint8_t accuracy;
     uint8_t work_buffer[WORK_BUFFER_SIZE];
     bool flag = true;
-    struct bhy_virtual_sensor_conf_param_conf sensor_conf = { 0 };
+    struct bhi360_virtual_sensor_conf_param_conf sensor_conf = { 0 };
     char line[256] = { 0 };
     uint8_t loop = 0;
     uint8_t limit = 50;
 
     uint8_t counter = 0;
 
-#ifdef BHY_USE_I2C
-    intf = BHY_I2C_INTERFACE;
+#ifdef BHI360_USE_I2C
+    intf = BHI360_I2C_INTERFACE;
 #else
-    intf = BHY_SPI_INTERFACE;
+    intf = BHI360_SPI_INTERFACE;
 #endif
 
     setup_interfaces(true, intf); /* Perform a power on reset */
 
-#ifdef BHY_USE_I2C
-    rslt = bhy_init(BHY_I2C_INTERFACE, bhy_i2c_read, bhy_i2c_write, bhy_delay_us, BHY_RD_WR_LEN, NULL, &bhy);
+#ifdef BHI360_USE_I2C
+    rslt = bhi360_init(BHI360_I2C_INTERFACE,
+                       bhi360_i2c_read,
+                       bhi360_i2c_write,
+                       bhi360_delay_us,
+                       BHI360_RD_WR_LEN,
+                       NULL,
+                       &bhy);
 #else
-    rslt = bhy_init(BHY_SPI_INTERFACE, bhy_spi_read, bhy_spi_write, bhy_delay_us, BHY_RD_WR_LEN, NULL, &bhy);
+    rslt = bhi360_init(BHI360_SPI_INTERFACE,
+                       bhi360_spi_read,
+                       bhi360_spi_write,
+                       bhi360_delay_us,
+                       BHI360_RD_WR_LEN,
+                       NULL,
+                       &bhy);
 #endif
     print_api_error(rslt, &bhy);
 
-    rslt = bhy_soft_reset(&bhy);
+    rslt = bhi360_soft_reset(&bhy);
     print_api_error(rslt, &bhy);
 
-    rslt = bhy_get_product_id(&product_id, &bhy);
+    rslt = bhi360_get_product_id(&product_id, &bhy);
     print_api_error(rslt, &bhy);
 
     /* Check for a valid product ID */
-    if (product_id != BHY_PRODUCT_ID)
+    if (product_id != BHI360_PRODUCT_ID)
     {
-        printf("Product ID read %X. Expected %X\r\n", product_id, BHY_PRODUCT_ID);
+        printf("Product ID read %X. Expected %X\r\n", product_id, BHI360_PRODUCT_ID);
     }
     else
     {
@@ -125,21 +137,21 @@ int main(int argc, char *argv[])
     }
 
     /* Check the interrupt pin and FIFO configurations. Disable status and debug */
-    hintr_ctrl = BHY_ICTL_DISABLE_STATUS_FIFO | BHY_ICTL_DISABLE_DEBUG;
+    hintr_ctrl = BHI360_ICTL_DISABLE_STATUS_FIFO | BHI360_ICTL_DISABLE_DEBUG;
 
-    rslt = bhy_set_host_interrupt_ctrl(hintr_ctrl, &bhy);
+    rslt = bhi360_set_host_interrupt_ctrl(hintr_ctrl, &bhy);
     print_api_error(rslt, &bhy);
 
     /* Configure the host interface */
     hif_ctrl = 0;
-    rslt = bhy_set_host_intf_ctrl(hif_ctrl, &bhy);
+    rslt = bhi360_set_host_intf_ctrl(hif_ctrl, &bhy);
     print_api_error(rslt, &bhy);
 
     /* Check if the sensor is ready to load firmware */
-    rslt = bhy_get_boot_status(&boot_status, &bhy);
+    rslt = bhi360_get_boot_status(&boot_status, &bhy);
     print_api_error(rslt, &bhy);
 
-    if (boot_status & BHY_BST_HOST_INTERFACE_READY)
+    if (boot_status & BHI360_BST_HOST_INTERFACE_READY)
     {
         uint8_t sensor_error;
         int8_t temp_rslt;
@@ -147,7 +159,7 @@ int main(int argc, char *argv[])
         counter++;
 
         rslt = upload_firmware(&bhy);
-        temp_rslt = bhy_get_error_value(&sensor_error, &bhy);
+        temp_rslt = bhi360_get_error_value(&sensor_error, &bhy);
         if (sensor_error)
         {
             printf("%s\r\n", get_sensor_error_text(sensor_error));
@@ -157,9 +169,9 @@ int main(int argc, char *argv[])
         print_api_error(temp_rslt, &bhy);
 
         printf("Booting from RAM.\r\n");
-        rslt = bhy_boot_from_ram(&bhy);
+        rslt = bhi360_boot_from_ram(&bhy);
 
-        temp_rslt = bhy_get_error_value(&sensor_error, &bhy);
+        temp_rslt = bhi360_get_error_value(&sensor_error, &bhy);
         if (sensor_error)
         {
             printf("%s\r\n", get_sensor_error_text(sensor_error));
@@ -168,9 +180,9 @@ int main(int argc, char *argv[])
         print_api_error(rslt, &bhy);
         print_api_error(temp_rslt, &bhy);
 
-        rslt = bhy_get_kernel_version(&version, &bhy);
+        rslt = bhi360_get_kernel_version(&version, &bhy);
         print_api_error(rslt, &bhy);
-        if ((rslt == BHY_OK) && (version != 0))
+        if ((rslt == BHI360_OK) && (version != 0))
         {
             printf("Boot successful. Kernel version %u.\r\n", version);
         }
@@ -188,7 +200,7 @@ int main(int argc, char *argv[])
         if (flag)
         {
             rslt = bhi3_perform_foc_crt(&foc_resp_acc, &foc_resp_gyro, &bhy, atoi(argv[1]));
-            if (rslt != BHY_OK)
+            if (rslt != BHI360_OK)
             {
                 close_interfaces(intf);
 
@@ -204,21 +216,21 @@ int main(int argc, char *argv[])
             printf("Loading firmware again.\r\n");
 
             rslt = upload_firmware(&bhy);
-            temp_rslt = bhy_get_error_value(&sensor_error, &bhy);
+            temp_rslt = bhi360_get_error_value(&sensor_error, &bhy);
             print_api_error(rslt, &bhy);
             print_api_error(temp_rslt, &bhy);
 
             printf("Booting from RAM again.\r\n");
-            rslt = bhy_boot_from_ram(&bhy);
+            rslt = bhi360_boot_from_ram(&bhy);
 
-            temp_rslt = bhy_get_error_value(&sensor_error, &bhy);
+            temp_rslt = bhi360_get_error_value(&sensor_error, &bhy);
             print_api_error(rslt, &bhy);
             print_api_error(temp_rslt, &bhy);
 
-            rslt = bhy_get_kernel_version(&version, &bhy);
+            rslt = bhi360_get_kernel_version(&version, &bhy);
             print_api_error(rslt, &bhy);
 
-            if ((rslt == BHY_OK) && (version != 0))
+            if ((rslt == BHI360_OK) && (version != 0))
             {
                 printf("Boot successful. Kernel version %u.\r\n", version);
             }
@@ -248,8 +260,8 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                rslt = bhy_phy_sensor_ctrl_param_accel_set_foc_calibration(&foc_resp_acc_backup, &bhy);
-                if (rslt != BHY_OK)
+                rslt = bhi360_phy_sensor_ctrl_param_accel_set_foc_calibration(&foc_resp_acc_backup, &bhy);
+                if (rslt != BHI360_OK)
                 {
                     printf("Set accel foc failed!\r\n");
                     close_interfaces(intf);
@@ -289,7 +301,7 @@ int main(int argc, char *argv[])
                 }
 
                 rslt = bhi3_load_gyro_crt(crt_backup, &bhy);
-                if (rslt != BHY_OK)
+                if (rslt != BHI360_OK)
                 {
                     printf("load gyro crt failed!\r\n");
                     printf("rslt = %d\r\n", rslt);
@@ -326,8 +338,8 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                rslt = bhy_phy_sensor_ctrl_param_gyro_set_foc_calibration(&foc_resp_gyro_backup, &bhy);
-                if (rslt != BHY_OK)
+                rslt = bhi360_phy_sensor_ctrl_param_gyro_set_foc_calibration(&foc_resp_gyro_backup, &bhy);
+                if (rslt != BHI360_OK)
                 {
                     printf("load gyro foc failed!\r\n");
                     close_interfaces(intf);
@@ -353,34 +365,35 @@ int main(int argc, char *argv[])
         }
 
         /* register meta event */
-        rslt = bhy_register_fifo_parse_callback(BHY_SYS_ID_META_EVENT, parse_meta_event, (void*)&accuracy, &bhy);
+        rslt = bhi360_register_fifo_parse_callback(BHI360_SYS_ID_META_EVENT, parse_meta_event, (void*)&accuracy, &bhy);
         print_api_error(rslt, &bhy);
-        rslt = bhy_register_fifo_parse_callback(BHY_SYS_ID_META_EVENT_WU, parse_meta_event, (void*)&accuracy, &bhy);
+        rslt =
+            bhi360_register_fifo_parse_callback(BHI360_SYS_ID_META_EVENT_WU, parse_meta_event, (void*)&accuracy, &bhy);
         print_api_error(rslt, &bhy);
 
         /* register sensor callback */
-        rslt = bhy_register_fifo_parse_callback(BHY_SENSOR_ID_ACC_PASS, parse_3axis_s16, (void*)&accuracy, &bhy);
+        rslt = bhi360_register_fifo_parse_callback(BHI360_SENSOR_ID_ACC_PASS, parse_3axis_s16, (void*)&accuracy, &bhy);
         print_api_error(rslt, &bhy);
-        rslt = bhy_register_fifo_parse_callback(BHY_SENSOR_ID_GYRO_PASS, parse_3axis_s16, (void*)&accuracy, &bhy);
+        rslt = bhi360_register_fifo_parse_callback(BHI360_SENSOR_ID_GYRO_PASS, parse_3axis_s16, (void*)&accuracy, &bhy);
         print_api_error(rslt, &bhy);
 
         /* process fifo */
-        rslt = bhy_get_and_process_fifo(work_buffer, WORK_BUFFER_SIZE, &bhy);
+        rslt = bhi360_get_and_process_fifo(work_buffer, WORK_BUFFER_SIZE, &bhy);
         print_api_error(rslt, &bhy);
 
         /* Update the callback table to enable parsing of sensor data */
-        rslt = bhy_update_virtual_sensor_list(&bhy);
+        rslt = bhi360_update_virtual_sensor_list(&bhy);
         print_api_error(rslt, &bhy);
 
         sensor_conf.sample_rate = 25.0f;
         sensor_conf.latency = 0;
 
-        rslt = bhy_virtual_sensor_conf_param_set_cfg(BHY_SENSOR_ID_ACC_PASS, &sensor_conf, &bhy);
+        rslt = bhi360_virtual_sensor_conf_param_set_cfg(BHI360_SENSOR_ID_ACC_PASS, &sensor_conf, &bhy);
         print_api_error(rslt, &bhy);
-        rslt = bhy_virtual_sensor_conf_param_set_cfg(BHY_SENSOR_ID_GYRO_PASS, &sensor_conf, &bhy);
+        rslt = bhi360_virtual_sensor_conf_param_set_cfg(BHI360_SENSOR_ID_GYRO_PASS, &sensor_conf, &bhy);
         print_api_error(rslt, &bhy);
 
-        while (rslt == BHY_OK)
+        while (rslt == BHI360_OK)
         {
             if (loop >= limit)
             {
@@ -391,7 +404,7 @@ int main(int argc, char *argv[])
             if (get_interrupt_status())
             {
                 /* Data from the FIFO is read and the relevant callbacks if registered are called */
-                rslt = bhy_get_and_process_fifo(work_buffer, WORK_BUFFER_SIZE, &bhy);
+                rslt = bhi360_get_and_process_fifo(work_buffer, WORK_BUFFER_SIZE, &bhy);
                 loop++;
                 print_api_error(rslt, &bhy);
             }
@@ -410,26 +423,26 @@ static int8_t bhi3_physical_sensor_control_set_crt(uint8_t sensor_id,
                                                    const uint8_t *payload,
                                                    uint16_t len,
                                                    uint8_t control_code,
-                                                   struct bhy_dev *dev)
+                                                   struct bhi360_dev *dev)
 {
-    int8_t rslt = BHY_OK;
+    int8_t rslt = BHI360_OK;
 
-    uint16_t cmnd_len = BHY_LE24MUL(len + 1); /*1 byte added for control code */
+    uint16_t cmnd_len = BHI360_LE24MUL(len + 1); /*1 byte added for control code */
     uint8_t cmnd[cmnd_len];
 
     memset(cmnd, 0, cmnd_len);
-    cmnd[0] = BHI3_PHY_SENSOR_CTRL_CODE(BHI3_PHY_SENSOR_CTRL_WRITE, control_code);
+    cmnd[0] = BHI360_PHY_SENSOR_CTRL_CODE(BHI360_PHY_SENSOR_CTRL_WRITE, control_code);
     cmnd[1] = 0;
 
     if (dev == NULL)
     {
-        rslt = BHY_E_NULL_PTR;
+        rslt = BHI360_E_NULL_PTR;
     }
     else
     {
         if (payload == NULL)
         {
-            rslt = BHY_E_NULL_PTR;
+            rslt = BHI360_E_NULL_PTR;
         }
         else
         {
@@ -438,7 +451,7 @@ static int8_t bhi3_physical_sensor_control_set_crt(uint8_t sensor_id,
                 cmnd[i + 2] = *(payload + i);
             }
 
-            rslt = bhy_set_parameter(BHI3_PHY_SENSOR_CTRL_PARAM(sensor_id), cmnd, cmnd_len, dev);
+            rslt = bhi360_set_parameter(BHI360_PHY_SENSOR_CTRL_PARAM(sensor_id), cmnd, cmnd_len, dev);
         }
     }
 
@@ -448,21 +461,21 @@ static int8_t bhi3_physical_sensor_control_set_crt(uint8_t sensor_id,
 /*!
  * @brief To set the Gyroscope CRT
  */
-static int8_t bhi3_load_gyro_crt(const uint8_t *gyro_crt, struct bhy_dev *dev)
+static int8_t bhi3_load_gyro_crt(const uint8_t *gyro_crt, struct bhi360_dev *dev)
 {
-    int8_t rslt = BHY_OK;
+    int8_t rslt = BHI360_OK;
 
     if (dev == NULL)
     {
-        rslt = BHY_E_NULL_PTR;
+        rslt = BHI360_E_NULL_PTR;
     }
     else
     {
         /*! Set the configuration parameter */
-        rslt = bhi3_physical_sensor_control_set_crt(BHY_PHYS_SENSOR_ID_GYROSCOPE,
+        rslt = bhi3_physical_sensor_control_set_crt(BHI360_PHYS_SENSOR_ID_GYROSCOPE,
                                                     gyro_crt,
-                                                    BHI3_PHY_CRT_CTRL_LEN,
-                                                    BHI3_PHY_GYRO_CRT_CTRL_CODE,
+                                                    BHI360_PHY_CRT_CTRL_LEN,
+                                                    BHI360_PHY_GYRO_CRT_CTRL_CODE,
                                                     dev);
     }
 
@@ -472,12 +485,12 @@ static int8_t bhi3_load_gyro_crt(const uint8_t *gyro_crt, struct bhy_dev *dev)
 /*!
  * @brief To perform foc and crt
  */
-static int8_t bhi3_perform_foc_crt(struct bhy_foc_resp *acc_foc_status,
-                                   struct bhy_foc_resp *gyro_foc_status,
-                                   struct bhy_dev *dev,
+static int8_t bhi3_perform_foc_crt(struct bhi360_foc_resp *acc_foc_status,
+                                   struct bhi360_foc_resp *gyro_foc_status,
+                                   struct bhi360_dev *dev,
                                    uint8_t flag)
 {
-    int8_t rslt = BHY_OK;
+    int8_t rslt = BHI360_OK;
 
     FILE *fp = fopen(CALIB_SEQ_FILE_NAME, "w");
 
@@ -491,7 +504,7 @@ static int8_t bhi3_perform_foc_crt(struct bhy_foc_resp *acc_foc_status,
     /* start acc foc process */
     if ((flag & 0x01) || flag == 0)
     {
-        rslt = bhy_perform_foc(BHY_PHYS_SENSOR_ID_ACCELEROMETER, acc_foc_status, dev);
+        rslt = bhi360_perform_foc(BHI360_PHYS_SENSOR_ID_ACCELEROMETER, acc_foc_status, dev);
         if (acc_foc_status->foc_status == SENSOR_FOC_FAIL)
         {
             printf("Acc foc process error, please make sure your device is available\r\n");
@@ -521,11 +534,11 @@ static int8_t bhi3_perform_foc_crt(struct bhy_foc_resp *acc_foc_status,
     /* start  gyro crt process */
     if ((flag & 0x02) || flag == 0)
     {
-        bhy_phy_sensor_ctrl_param_gyro_crt_status data_crt = { 0 };
+        bhi360_phy_sensor_ctrl_param_gyro_crt_status data_crt = { 0 };
 
-        rslt = bhy_phy_sensor_ctrl_param_gyro_start_comp_retrim(dev);
-        rslt = bhy_phy_sensor_ctrl_param_gyro_get_crt_status(&data_crt, dev);
-        if (rslt != BHY_OK)
+        rslt = bhi360_phy_sensor_ctrl_param_gyro_start_comp_retrim(dev);
+        rslt = bhi360_phy_sensor_ctrl_param_gyro_get_crt_status(&data_crt, dev);
+        if (rslt != BHI360_OK)
         {
             printf("CRT failed!\r\n");
             close_interfaces(intf);
@@ -557,7 +570,7 @@ static int8_t bhi3_perform_foc_crt(struct bhy_foc_resp *acc_foc_status,
     /* start  gyro foc process */
     if ((flag & 0x04) || flag == 0)
     {
-        rslt = bhy_perform_foc(BHY_PHYS_SENSOR_ID_GYROSCOPE, gyro_foc_status, dev);
+        rslt = bhi360_perform_foc(BHI360_PHYS_SENSOR_ID_GYROSCOPE, gyro_foc_status, dev);
         if (gyro_foc_status->foc_status == SENSOR_FOC_FAIL)
         {
             printf("Gyro foc process error, please make sure your device is available\r\n");
@@ -593,26 +606,27 @@ static void time_to_s_ns(uint64_t time_ticks, uint32_t *s, uint32_t *ns, uint64_
     *ns = (uint32_t)(*tns - ((*s) * UINT64_C(1000000000)));
 }
 
-static void parse_3axis_s16(const struct bhy_fifo_parse_data_info *callback_info, void *callback_ref)
+static void parse_3axis_s16(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
 {
-    struct bhy_event_data_xyz data;
+    struct bhi360_event_data_xyz data;
     uint32_t s, ns;
     uint64_t tns;
     float scaling_factor = 0.0f;
 
-    if (callback_info->sensor_id >= BHY_SENSOR_ID_ACC_PASS && callback_info->sensor_id <= BHY_SENSOR_ID_ACC_RAW_WU)
+    if (callback_info->sensor_id >= BHI360_SENSOR_ID_ACC_PASS &&
+        callback_info->sensor_id <= BHI360_SENSOR_ID_ACC_RAW_WU)
     {
         scaling_factor = 1.0f / 4096.0f;
     }
-    else if (callback_info->sensor_id >= BHY_SENSOR_ID_GYRO_PASS &&
-             callback_info->sensor_id <= BHY_SENSOR_ID_GYRO_RAW_WU)
+    else if (callback_info->sensor_id >= BHI360_SENSOR_ID_GYRO_PASS &&
+             callback_info->sensor_id <= BHI360_SENSOR_ID_GYRO_RAW_WU)
     {
         scaling_factor = 2000.0f / 32768.0f;
     }
 
     uint8_t *accuracy = (uint8_t*)callback_ref;
 
-    bhy_event_data_parse_xyz(callback_info->data_ptr, &data);
+    bhi360_event_data_parse_xyz(callback_info->data_ptr, &data);
 
     time_to_s_ns(*callback_info->time_stamp, &s, &ns, &tns);
 
@@ -626,7 +640,7 @@ static void parse_3axis_s16(const struct bhy_fifo_parse_data_info *callback_info
            *accuracy);
 }
 
-static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_info, void *callback_ref)
+static void parse_meta_event(const struct bhi360_fifo_parse_data_info *callback_info, void *callback_ref)
 {
     (void)callback_ref;
     uint8_t meta_event_type = callback_info->data_ptr[0];
@@ -635,11 +649,11 @@ static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_inf
     char *event_text;
     uint8_t *accuracy = (uint8_t*)callback_ref;
 
-    if (callback_info->sensor_id == BHY_SYS_ID_META_EVENT)
+    if (callback_info->sensor_id == BHI360_SYS_ID_META_EVENT)
     {
         event_text = "[META EVENT]";
     }
-    else if (callback_info->sensor_id == BHY_SYS_ID_META_EVENT_WU)
+    else if (callback_info->sensor_id == BHI360_SYS_ID_META_EVENT_WU)
     {
         event_text = "[META EVENT WAKE UP]";
     }
@@ -650,19 +664,19 @@ static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_inf
 
     switch (meta_event_type)
     {
-        case BHY_META_EVENT_FLUSH_COMPLETE:
+        case BHI360_META_EVENT_FLUSH_COMPLETE:
             printf("%s Flush complete for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_SAMPLE_RATE_CHANGED:
+        case BHI360_META_EVENT_SAMPLE_RATE_CHANGED:
             printf("%s Sample rate changed for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_POWER_MODE_CHANGED:
+        case BHI360_META_EVENT_POWER_MODE_CHANGED:
             printf("%s Power mode changed for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_ALGORITHM_EVENTS:
+        case BHI360_META_EVENT_ALGORITHM_EVENTS:
             printf("%s Algorithm event\r\n", event_text);
             break;
-        case BHY_META_EVENT_SENSOR_STATUS:
+        case BHI360_META_EVENT_SENSOR_STATUS:
             printf("%s Accuracy for sensor id %u changed to %u\r\n", event_text, byte1, byte2);
             if (accuracy)
             {
@@ -670,41 +684,41 @@ static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_inf
             }
 
             break;
-        case BHY_META_EVENT_BSX_DO_STEPS_MAIN:
+        case BHI360_META_EVENT_BSX_DO_STEPS_MAIN:
             printf("%s BSX event (do steps main)\r\n", event_text);
             break;
-        case BHY_META_EVENT_BSX_DO_STEPS_CALIB:
+        case BHI360_META_EVENT_BSX_DO_STEPS_CALIB:
             printf("%s BSX event (do steps calib)\r\n", event_text);
             break;
-        case BHY_META_EVENT_BSX_GET_OUTPUT_SIGNAL:
+        case BHI360_META_EVENT_BSX_GET_OUTPUT_SIGNAL:
             printf("%s BSX event (get output signal)\r\n", event_text);
             break;
-        case BHY_META_EVENT_SENSOR_ERROR:
+        case BHI360_META_EVENT_SENSOR_ERROR:
             printf("%s Sensor id %u reported error 0x%02X\r\n", event_text, byte1, byte2);
             break;
-        case BHY_META_EVENT_FIFO_OVERFLOW:
+        case BHI360_META_EVENT_FIFO_OVERFLOW:
             printf("%s FIFO overflow\r\n", event_text);
             break;
-        case BHY_META_EVENT_DYNAMIC_RANGE_CHANGED:
+        case BHI360_META_EVENT_DYNAMIC_RANGE_CHANGED:
             printf("%s Dynamic range changed for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_FIFO_WATERMARK:
+        case BHI360_META_EVENT_FIFO_WATERMARK:
             printf("%s FIFO watermark reached\r\n", event_text);
             break;
-        case BHY_META_EVENT_INITIALIZED:
+        case BHI360_META_EVENT_INITIALIZED:
             printf("%s Firmware initialized. Firmware version %u\r\n", event_text, ((uint16_t)byte2 << 8) | byte1);
             break;
-        case BHY_META_TRANSFER_CAUSE:
+        case BHI360_META_TRANSFER_CAUSE:
             printf("%s Transfer cause for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_SENSOR_FRAMEWORK:
+        case BHI360_META_EVENT_SENSOR_FRAMEWORK:
             printf("%s Sensor framework event for sensor id %u\r\n", event_text, byte1);
             break;
-        case BHY_META_EVENT_RESET:
+        case BHI360_META_EVENT_RESET:
             printf("%s Reset event\r\n", event_text);
-            close_interfaces(BHY_SPI_INTERFACE);
+            close_interfaces(BHI360_SPI_INTERFACE);
             break;
-        case BHY_META_EVENT_SPACER:
+        case BHI360_META_EVENT_SPACER:
             break;
         default:
             printf("%s Unknown meta event with id: %u\r\n", event_text, meta_event_type);
@@ -712,33 +726,33 @@ static void parse_meta_event(const struct bhy_fifo_parse_data_info *callback_inf
     }
 }
 
-static void print_api_error(int8_t rslt, struct bhy_dev *dev)
+static void print_api_error(int8_t rslt, struct bhi360_dev *dev)
 {
-    if (rslt != BHY_OK)
+    if (rslt != BHI360_OK)
     {
         printf("%s\r\n", get_api_error(rslt));
-        if ((rslt == BHY_E_IO) && (dev != NULL))
+        if ((rslt == BHI360_E_IO) && (dev != NULL))
         {
             printf("%s\r\n", get_coines_error(dev->hif.intf_rslt));
-            dev->hif.intf_rslt = BHY_INTF_RET_SUCCESS;
+            dev->hif.intf_rslt = BHI360_INTF_RET_SUCCESS;
         }
 
         exit(0);
     }
 }
 
-static int8_t upload_firmware(struct bhy_dev *dev)
+static int8_t upload_firmware(struct bhi360_dev *dev)
 {
     uint32_t incr = 256; /* Max command packet size */
-    uint32_t len = sizeof(bhy_firmware_image);
-    int8_t rslt = BHY_OK;
+    uint32_t len = sizeof(bhi360_firmware_image);
+    int8_t rslt = BHI360_OK;
 
     if ((incr % 4) != 0) /* Round off to higher 4 bytes */
     {
         incr = ((incr >> 2) + 1) << 2;
     }
 
-    for (uint32_t i = 0; (i < len) && (rslt == BHY_OK); i += incr)
+    for (uint32_t i = 0; (i < len) && (rslt == BHI360_OK); i += incr)
     {
         if (incr > (len - i)) /* If last payload */
         {
@@ -749,7 +763,7 @@ static int8_t upload_firmware(struct bhy_dev *dev)
             }
         }
 
-        rslt = bhy_upload_firmware_to_ram_partly(&bhy_firmware_image[i], len, i, incr, dev);
+        rslt = bhi360_upload_firmware_to_ram_partly(&bhi360_firmware_image[i], len, i, incr, dev);
 
         printf("%.2f%% complete\r", (float)(i + incr) / (float)len * 100.0f);
     }

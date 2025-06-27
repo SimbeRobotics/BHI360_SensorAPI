@@ -2,7 +2,7 @@ COINES_INSTALL_PATH ?= ../../../..
 
 EXAMPLE_FILE ?= phy_sensor_ctrl_param.c
 
-BHY_INTF ?= 
+BHI360_INTF ?= 
 
 COINES_BACKEND ?= COINES_BRIDGE
 
@@ -15,12 +15,15 @@ LOCATION ?= FLASH
 
 C_SRCS += \
 $(COMMON_LOCATION)/common/common.c \
-$(API_LOCATION)/bhy.c \
-$(API_LOCATION)/bhy_hif.c \
-$(API_LOCATION)/bhy_parse.c \
-$(API_LOCATION)/bhy_virtual_sensor_info_param.c \
-$(API_LOCATION)/bhy_system_param.c \
-$(API_LOCATION)/bhy_phy_sensor_ctrl_param.c
+$(COMMON_LOCATION)/common/verbose.c \
+$(API_LOCATION)/bhi360.c \
+$(API_LOCATION)/bhi360_hif.c \
+$(API_LOCATION)/bhi360_logbin.c \
+$(API_LOCATION)/bhi360_parse.c \
+$(API_LOCATION)/bhi360_event_data.c \
+$(API_LOCATION)/bhi360_virtual_sensor_info_param.c \
+$(API_LOCATION)/bhi360_system_param.c \
+$(API_LOCATION)/bhi360_phy_sensor_ctrl_param.c
 
 INCLUDEPATHS += . \
 $(COMMON_LOCATION)/common \
@@ -28,8 +31,8 @@ $(API_LOCATION) \
 $(FW_LOCATION)/firmware
 
 # By default, the sensor is connected over SPI. Define this to change to I2C
-ifeq ($(BHY_INTF), I2C)
-CFLAGS += -DBHY_USE_I2C
+ifeq ($(BHI360_INTF), I2C)
+CFLAGS += -DBHI360_USE_I2C
 endif
 
 include $(COINES_INSTALL_PATH)/coines.mk
