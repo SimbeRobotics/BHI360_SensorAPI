@@ -40,17 +40,17 @@
 
 #include <stdbool.h>
 
-#include "bhy.h"
-#include "bhi3_defs.h"
-#include "bhy_activity_param.h"
-#include "bhy_bsec_param.h"
-#include "bhy_bsx_algo_param.h"
-#include "bhy_head_orientation_param.h"
-#include "bhy_multi_tap_param.h"
-#include "bhy_phy_sensor_ctrl_param.h"
-#include "bhy_system_param.h"
-#include "bhy_virtual_sensor_conf_param.h"
-#include "bhy_virtual_sensor_info_param.h"
+#include "bhi360.h"
+#include "bhi360_defs.h"
+#include "bhi360_activity_param.h"
+#include "bhi360_bsec_param.h"
+#include "bhi360_bsx_algo_param.h"
+#include "bhi360_head_orientation_param.h"
+#include "bhi360_multi_tap_param.h"
+#include "bhi360_phy_sensor_ctrl_param.h"
+#include "bhi360_system_param.h"
+#include "bhi360_virtual_sensor_conf_param.h"
+#include "bhi360_virtual_sensor_info_param.h"
 #include "coines.h"
 
 #define BHY360_APP20_CS_PIN     COINES_SHUTTLE_PIN_7
@@ -62,12 +62,12 @@
 
 #ifdef PC
 #ifdef COINES_BRIDGE
-#define BHY_RD_WR_LEN           256   /* Coines bridge maximum read write length */
+#define BHI360_RD_WR_LEN        256      /* Coines bridge maximum read write length */
 #else
-#define BHY_RD_WR_LEN           44    /* USB maximum read write length(DD firmware) */
+#define BHI360_RD_WR_LEN        44       /* USB maximum read write length(DD firmware) */
 #endif
 #else
-#define BHY_RD_WR_LEN           256   /* MCU maximum read write length */
+#define BHI360_RD_WR_LEN        256      /* MCU maximum read write length */
 #endif
 
 char *get_coines_error(int16_t rslt);
@@ -81,14 +81,14 @@ char *get_sensor_si_unit(uint8_t sensor_id);
 char *get_sensor_parse_format(uint8_t sensor_id);
 char *get_sensor_axis_names(uint8_t sensor_id);
 
-void setup_interfaces(bool reset_power, enum bhy_intf intf);
-void setup_interfaces_with_port(bool reset_power, enum bhy_intf intf, const char *com_port);
-void close_interfaces(enum bhy_intf intf);
-int8_t bhy_spi_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr);
-int8_t bhy_spi_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr);
-int8_t bhy_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr);
-int8_t bhy_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr);
-void bhy_delay_us(uint32_t us, void *private_data);
+void setup_interfaces(bool reset_power, enum bhi360_intf intf);
+void setup_interfaces_with_port(bool reset_power, enum bhi360_intf intf, const char *com_port);
+void close_interfaces(enum bhi360_intf intf);
+int8_t bhi360_spi_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr);
+int8_t bhi360_spi_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr);
+int8_t bhi360_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr);
+int8_t bhi360_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr);
+void bhi360_delay_us(uint32_t us, void *private_data);
 bool get_interrupt_status(void);
 
 #endif /* _COMMON_H_ */

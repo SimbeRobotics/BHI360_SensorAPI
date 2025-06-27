@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
                 output_file = fopen(output_file_name, "w");
                 if (output_file)
                 {
-                    fprintf(output_file, "const unsigned char bhy_firmware_image[] = {\n");
+                    fprintf(output_file, "const unsigned char bhi360_firmware_image[] = {\n");
                     unsigned char bytes_read = 0;
                     unsigned char j = 0;
                     do
