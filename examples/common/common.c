@@ -1127,6 +1127,7 @@ float get_sensor_dynamic_range_scaling(uint8_t sensor_id, float dynamic_range)
         case BHI360_SENSOR_ID_ACC_BIAS:
         case BHI360_SENSOR_ID_ACC_WU:
         case BHI360_SENSOR_ID_ACC_RAW_WU:
+        case BHI360_SENSOR_ID_LACC: // manually added in
             scaling = dynamic_range / 32768.0f;
             break;
         case BHI360_SENSOR_ID_GYRO_PASS:
